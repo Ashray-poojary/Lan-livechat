@@ -49,7 +49,7 @@ lan-chat/
 
 ```bash
 # Clone the repo
-git clone https://github.com/YOUR_USERNAME/lan-chat.git
+git clone https://github.com/Ashray-poojary/lan-chat.git
 cd lan-chat
 
 # Install dependencies
