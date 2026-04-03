@@ -1,6 +1,8 @@
-# 🖥️ LAN Chat
+# LAN Chat
 
 A real-time local network chat app — no internet required. Just run the server, share the IP, and anyone on the same LAN or hotspot can chat instantly in their browser.
+
+Uses log in method, password is also hashed no repeated username.
 
 Built with **Node.js**, **Express**, and **Socket.io**.
 
@@ -14,14 +16,15 @@ Built with **Node.js**, **Express**, and **Socket.io**.
 
 ## Features
 
-- ⚡ Real-time messaging via WebSockets (Socket.io)
-- 👤 Username selection on join
-- 🟢 Live online users list
-- 📢 Join / leave notifications
-- 💬 Your own messages are highlighted
-- 📱 Works on mobile browsers
-- 🔌 100% offline — no internet needed
-- 🐧 Works on Linux, Windows, macOS, and Termux (Android)
+- Real-time messaging via WebSockets (Socket.io)
+-  Register or log in 
+-  Username selection on join
+-  Live online users list
+-  Join / leave notifications
+-  Your own messages are highlighted
+-  Works on mobile browsers
+-  100% offline — no internet needed
+-  Works on Linux, Windows, macOS, and Termux (Android)
 
 ---
 
