@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LAN Chat</title>
+<script src="/socket.io.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a40;
+    --accent: #7c6af7;
+    --accent2: #f75f6a;
+    --green: #4ef094;
+    --yellow: #f7d46a;
+    --text: #e0dff8;
+    --muted: #6b6a8a;
+    --red: #f75f6a;
+    --font: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.2;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ===== AUTH SCREEN ===== */
+  #auth-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+  }
+
+  .auth-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    width: min(420px, 92vw);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .auth-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+  }
+
+  .auth-header {
+    padding: 28px 32px 0;
+  }
+
+  .auth-badge {
+    font-size: 10px;
+    color: var(--green);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .auth-badge::before {
+    content: '';
+    width: 7px; height: 7px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .auth-title {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -1px;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .auth-title span { color: var(--accent); }
+
+  .auth-sub {
+    color: var(--muted);
+    font-size: 11px;
+    margin-bottom: 24px;
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    margin: 0 32px;
+  }
+
+  .tab {
+    padding: 10px 20px;
+    font-family: var(--font);
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    color: var(--muted);
+    border: none;
+    background: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.2s;
+  }
+
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .auth-body { padding: 24px 32px 32px; }
+
+  .auth-form { display: none; flex-direction: column; gap: 14px; }
+  .auth-form.active { display: flex; }
+
+  .field { display: flex; flex-direction: column; gap: 6px; }
+
+  .field label {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .field input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 14px;
+    padding: 11px 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    caret-color: var(--accent);
+  }
+
+  .field input:focus { border-color: var(--accent); }
+  .field input::placeholder { color: var(--muted); }
+
+  .auth-btn {
+    width: 100%;
+    background: var(--accent);
+    color: white;
+    border: none;
+    font-family: var(--font);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-top: 4px;
+  }
+
+  .auth-btn:hover { background: #9380ff; }
+  .auth-btn:active { opacity: 0.9; }
+
+  .auth-error {
+    background: rgba(247, 95, 106, 0.12);
+    border: 1px solid rgba(247, 95, 106, 0.3);
+    color: var(--red);
+    font-size: 12px;
+    padding: 10px 14px;
+    display: none;
+  }
+
+  .auth-error.visible { display: block; }
+
+  /* ===== MAIN APP ===== */
+  #app {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    height: 100dvh;
+    position: relative;
+    z-index: 1;
+  }
+
+  #header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+    gap: 12px;
+  }
+
+  .header-left { display: flex; align-items: center; gap: 10px; }
+
+  .logo { font-size: 16px; font-weight: 700; letter-spacing: -0.5px; }
+  .logo span { color: var(--accent); }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+    flex-shrink: 0;
+  }
+
+  .header-right { display: flex; align-items: center; gap: 10px; }
+
+  #logged-as {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  #logged-as span { color: var(--accent); font-weight: 700; }
+
+  .hdr-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: var(--font);
+    font-size: 10px;
+    padding: 5px 10px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: all 0.2s;
+  }
+
+  .hdr-btn:hover { color: var(--text); border-color: var(--accent2); }
+
+  #user-count { font-size: 11px; color: var(--muted); }
+
+  #body { display: flex; flex: 1; overflow: hidden; }
+
+  #messages-col { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    scroll-behavior: smooth;
+  }
+
+  #messages::-webkit-scrollbar { width: 4px; }
+  #messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .msg {
+    display: flex;
+    gap: 12px;
+    padding: 5px 8px;
+    border-radius: 3px;
+    transition: background 0.15s;
+    animation: msgIn 0.2s ease;
+  }
+
+  @keyframes msgIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg:hover { background: var(--surface2); }
+  .msg.own { background: rgba(124, 106, 247, 0.07); }
+  .msg.own:hover { background: rgba(124, 106, 247, 0.12); }
+
+  .msg-time { font-size: 10px; color: var(--muted); flex-shrink: 0; margin-top: 3px; width: 40px; }
+  .msg-body { flex: 1; min-width: 0; }
+  .msg-user { font-size: 11px; font-weight: 700; color: var(--accent); margin-bottom: 2px; }
+  .msg.own .msg-user { color: var(--accent2); }
+  .msg-text { font-size: 14px; line-height: 1.5; word-break: break-word; }
+
+  .sys-msg {
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    padding: 6px;
+    letter-spacing: 1px;
+    animation: msgIn 0.2s ease;
+  }
+
+  .sys-msg::before { content: '— '; }
+  .sys-msg::after  { content: ' —'; }
+  .sys-msg.join  { color: var(--green); }
+  .sys-msg.leave { color: var(--yellow); }
+
+  #input-bar {
+    display: flex;
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+    gap: 0;
+    align-items: stretch;
+  }
+
+  .input-prefix {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-right: none;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  #msg-input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 14px;
+    padding: 11px 14px;
+    outline: none;
+    caret-color: var(--accent);
+    transition: border-color 0.2s;
+  }
+
+  #msg-input:focus { border-color: var(--accent); }
+  #msg-input::placeholder { color: var(--muted); }
+
+  #send-btn {
+    background: var(--accent);
+    border: none;
+    color: white;
+    font-family: var(--font);
+    font-size: 18px;
+    padding: 0 18px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  #send-btn:hover { background: #9380ff; }
+
+  #sidebar {
+    width: 190px;
+    border-left: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: width 0.2s;
+  }
+
+  #sidebar.hidden { width: 0; border: none; overflow: hidden; }
+
+  .sidebar-header {
+    padding: 12px 14px;
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  #user-list { flex: 1; overflow-y: auto; padding: 6px; }
+
+  .user-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    font-size: 12px;
+    animation: msgIn 0.2s ease;
+  }
+
+  .user-item .dot { width: 7px; height: 7px; background: var(--green); border-radius: 50%; flex-shrink: 0; }
+  .user-item .uname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .user-item.me .uname { color: var(--accent); font-weight: 700; }
+
+  @media (max-width: 600px) {
+    #sidebar { display: none; }
+    .hdr-btn.toggle { display: none; }
+    .input-prefix { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-header">
+      <div class="auth-badge">LAN · Local Network</div>
+      <div class="auth-title">LAN<span>Chat</span></div>
+      <div class="auth-sub">Create an account or sign in to start chatting</div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('login')">Login</button>
+      <button class="tab" onclick="switchTab('register')">Register</button>
+    </div>
+
+    <div class="auth-body">
+      <!-- Login -->
+      <div class="auth-form active" id="login-form">
+        <div id="login-error" class="auth-error"></div>
+        <div class="field">
+          <label>Username</label>
+          <input id="login-user" type="text" placeholder="Your username" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input id="login-pass" type="password" placeholder="Your password">
+        </div>
+        <button class="auth-btn" onclick="login()">Sign In →</button>
+      </div>
+
+      <!-- Register -->
+      <div class="auth-form" id="register-form">
+        <div id="register-error" class="auth-error"></div>
+        <div class="field">
+          <label>Choose Username</label>
+          <input id="reg-user" type="text" placeholder="Pick a username" maxlength="20" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input id="reg-pass" type="password" placeholder="At least 4 characters">
+        </div>
+        <button class="auth-btn" onclick="register()">Create Account →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <div id="header">
+    <div class="header-left">
+      <div class="status-dot"></div>
+      <div class="logo">LAN<span>Chat</span></div>
+      <div id="user-count">0 online</div>
+    </div>
+    <div class="header-right">
+      <div id="logged-as">logged in as <span id="current-user"></span></div>
+      <button class="hdr-btn toggle" onclick="toggleSidebar()">Users</button>
+      <button class="hdr-btn" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div id="body">
+    <div id="messages-col">
+      <div id="messages"></div>
+      <div id="input-bar">
+        <div class="input-prefix" id="input-prefix">me</div>
+        <input id="msg-input" type="text" placeholder="Type a message..." maxlength="500" autocomplete="off">
+        <button id="send-btn">↑</button>
+      </div>
+    </div>
+    <div id="sidebar">
+      <div class="sidebar-header">Online</div>
+      <div id="user-list"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const socket = io();
+  let myUsername = '';
+  let myToken = '';
+  let sidebarOpen = true;
+
+  // ── Tab switching ──────────────────────────────
+  function switchTab(tab) {
+    document.querySelectorAll('.tab').forEach((t, i) => {
+      t.classList.toggle('active', (i === 0 && tab === 'login') || (i === 1 && tab === 'register'));
+    });
+    document.getElementById('login-form').classList.toggle('active', tab === 'login');
+    document.getElementById('register-form').classList.toggle('active', tab === 'register');
+    clearErrors();
+  }
+
+  function clearErrors() {
+    ['login-error', 'register-error'].forEach(id => {
+      const el = document.getElementById(id);
+      el.textContent = '';
+      el.classList.remove('visible');
+    });
+  }
+
+  function showError(id, msg) {
+    const el = document.getElementById(id);
+    el.textContent = msg;
+    el.classList.add('visible');
+  }
+
+  // ── Auth ──────────────────────────────────────
+  async function login() {
+    const username = document.getElementById('login-user').value.trim();
+    const password = document.getElementById('login-pass').value;
+    if (!username || !password) return showError('login-error', 'Fill in both fields');
+
+    const res = await fetch('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    }).then(r => r.json());
+
+    if (!res.ok) return showError('login-error', res.error);
+    enterChat(res.token, res.username);
+  }
+
+  async function register() {
+    const username = document.getElementById('reg-user').value.trim();
+    const password = document.getElementById('reg-pass').value;
+    if (!username || !password) return showError('register-error', 'Fill in both fields');
+
+    const res = await fetch('/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    }).then(r => r.json());
+
+    if (!res.ok) return showError('register-error', res.error);
+    enterChat(res.token, res.username);
+  }
+
+  function enterChat(token, username) {
+    myToken = token;
+    myUsername = username;
+    document.getElementById('current-user').textContent = username;
+    document.getElementById('input-prefix').textContent = username;
+    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    socket.emit('join', token);
+    document.getElementById('msg-input').focus();
+  }
+
+  function logout() {
+    location.reload();
+  }
+
+  // ── Socket events ─────────────────────────────
+  socket.on('auth-error', (msg) => {
+    alert(msg || 'Auth failed. Please login again.');
+    location.reload();
+  });
+
+  socket.on('message', (data) => {
+    const div = document.createElement('div');
+    div.className = 'msg' + (data.username === myUsername ? ' own' : '');
+    div.innerHTML = `
+      <div class="msg-time">${data.time}</div>
+      <div class="msg-body">
+        <div class="msg-user">${esc(data.username)}</div>
+        <div class="msg-text">${esc(data.text)}</div>
+      </div>`;
+    document.getElementById('messages').appendChild(div);
+    scrollBottom();
+  });
+
+  socket.on('system', (data) => {
+    const div = document.createElement('div');
+    div.className = `sys-msg ${data.type}`;
+    div.textContent = data.text;
+    document.getElementById('messages').appendChild(div);
+    scrollBottom();
+  });
+
+  socket.on('user-list', (users) => {
+    document.getElementById('user-count').textContent = `${users.length} online`;
+    const ul = document.getElementById('user-list');
+    ul.innerHTML = '';
+    users.forEach(name => {
+      const div = document.createElement('div');
+      div.className = 'user-item' + (name === myUsername ? ' me' : '');
+      div.innerHTML = `<div class="dot"></div><div class="uname">${esc(name)}${name === myUsername ? ' (you)' : ''}</div>`;
+      ul.appendChild(div);
+    });
+  });
+
+  // ── Send message ──────────────────────────────
+  function sendMessage() {
+    const input = document.getElementById('msg-input');
+    const text = input.value.trim();
+    if (!text) return;
+    socket.emit('message', text);
+    input.value = '';
+    input.focus();
+  }
+
+  document.getElementById('send-btn').addEventListener('click', sendMessage);
+  document.getElementById('msg-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') sendMessage();
+  });
+
+  // ── Enter key on auth fields ──────────────────
+  document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+  document.getElementById('reg-pass').addEventListener('keydown', e => { if (e.key === 'Enter') register(); });
+
+  // ── Sidebar ───────────────────────────────────
+  function toggleSidebar() {
+    sidebarOpen = !sidebarOpen;
+    document.getElementById('sidebar').classList.toggle('hidden', !sidebarOpen);
+  }
+
+  function scrollBottom() {
+    const m = document.getElementById('messages');
+    m.scrollTop = m.scrollHeight;
+  }
+
+  function esc(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+</body>
+</html>
