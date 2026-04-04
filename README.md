@@ -10,7 +10,10 @@ Built with **Node.js**, **Express**, and **Socket.io**.
 
 ## Screenshots
 
-![register](screenshots/register.jpg)![login](screenshots/login.jpg)
+![register](screenshots/register.jpg)
+![login](screenshots/login.jpg)
+![register](screenshots/join.jpg)
+![register](screenshots/chat.jpg)
 
 
 > Dark terminal-style UI with live messaging, online users list, and join/leave notifications.
